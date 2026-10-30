@@ -42,6 +42,8 @@ e registra, em cada lote:
 - data de importação e versão do importador;
 - fuso original UTC e regra explícita de conversão;
 - valores ausentes `9999`, `Null` ou vazios, sem imputação silenciosa;
+- umidade relativa fora de 0% a 100% tratada como ausente somente na camada
+  derivada, preservando o valor original no arquivo bruto;
 - flag `raw_unvalidated` para dados automáticos brutos/não consistidos;
 - contagem de linhas aceitas, rejeitadas e ausentes por variável.
 

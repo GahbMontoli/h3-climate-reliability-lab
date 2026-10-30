@@ -119,7 +119,7 @@ public sealed class InmetCsvParser
             observations.Add(new InmetObservation(
                 timestamp,
                 ParseNumber(fields[temperatureIndex]),
-                ParseNumber(fields[humidityIndex]),
+                ParseRelativeHumidity(fields[humidityIndex]),
                 ParseNumber(fields[dewPointIndex])));
         }
 
@@ -216,6 +216,12 @@ public sealed class InmetCsvParser
             out var parsed)
             ? parsed
             : null;
+    }
+
+    private static double? ParseRelativeHumidity(string raw)
+    {
+        var value = ParseNumber(raw);
+        return value is >= 0 and <= 100 ? value : null;
     }
 
     private static string[] ParseFields(string line)

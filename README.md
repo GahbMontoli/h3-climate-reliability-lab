@@ -90,7 +90,9 @@ Manaus A101/2025, mas aceita outro ano e código.
 
 A saída `output\inmet-2025-A101` contém o CSV bruto imutável, resumo JSON e
 relatório Markdown. Nenhum HTML é criado. Ausências `9999`, `Null` e vazios são
-mantidas como ausentes, sem imputação.
+mantidas como ausentes, sem imputação. Umidade relativa fora do intervalo físico
+de 0% a 100% também é tratada como ausente na camada derivada, enquanto o CSV
+bruto permanece preservado para auditoria.
 
 Na execução verificada de A101/2025, foram transferidos 349.533 bytes de um ZIP
 de 90.898.634 bytes. O resultado e sua interpretação responsável estão em

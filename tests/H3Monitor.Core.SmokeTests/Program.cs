@@ -16,6 +16,7 @@ var tests = new (string Name, Action Run)[]
     ("Relatórios são gerados", ReportsAreGenerated),
     ("Experimento é determinístico e pareado", ExperimentIsDeterministicAndPaired),
     ("Relatório de pesquisa não depende de HTML", ExperimentReportsAreGenerated),
+    ("INMET rejeita umidade fisicamente impossível", InmetRejectsImpossibleHumidity),
     ("INMET é extraído por faixas com fixture local", InmetRangeFixtureIsImported),
     ("INMET rejeita servidor que ignora Range", InmetRejectsFullDownload),
     ("INMET rejeita estrutura ZIP corrompida", InmetRejectsCorruptZip)
@@ -239,6 +240,26 @@ static void InmetRangeFixtureIsImported()
             Directory.Delete(directory, recursive: true);
         }
     }
+}
+
+static void InmetRejectsImpossibleHumidity()
+{
+    var csv = """
+REGIAO:;N
+UF:;AM
+ESTACAO:;MANAUS
+CODIGO (WMO):;A101
+Data;Hora UTC;TEMPERATURA DO AR - BULBO SECO, HORARIA (°C);UMIDADE RELATIVA DO AR, HORARIA (%);TEMPERATURA DO PONTO DE ORVALHO (°C);
+2025/01/01;0000 UTC;30,0;101;26,2;
+2025/01/01;0100 UTC;29,5;100;25,9;
+""";
+
+    var dataset = new InmetCsvParser().Parse(Encoding.UTF8.GetBytes(csv));
+    EqualValue(2, dataset.Observations.Count);
+    True(
+        dataset.Observations[0].RelativeHumidityPercent is null,
+        "Umidade acima de 100% foi aceita na camada derivada.");
+    EqualValue(100d, dataset.Observations[1].RelativeHumidityPercent!.Value);
 }
 
 static void InmetRejectsFullDownload()
