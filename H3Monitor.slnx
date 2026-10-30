@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/H3Monitor.Core/H3Monitor.Core.csproj" />
+  <Project Path="src/H3Monitor.Cli/H3Monitor.Cli.csproj" />
+  <Project Path="tests/H3Monitor.Core.SmokeTests/H3Monitor.Core.SmokeTests.csproj" />
+</Solution>
