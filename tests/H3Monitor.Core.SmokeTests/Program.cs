@@ -16,6 +16,9 @@ var tests = new (string Name, Action Run)[]
     ("Quantidade de amostras", SampleCount),
     ("Estatísticas preservam aviso sintético", StatisticsAreSynthetic),
     ("Contrato BI rejeita identificador inseguro", BiContractRejectsUnsafeIdentifier),
+    ("Manifesto BI aceita exportação íntegra", BiManifestAcceptsValidExport),
+    ("Manifesto BI rejeita CSV alterado", BiManifestRejectsTamperedCsv),
+    ("Manifesto BI rejeita caminho inseguro", BiManifestRejectsUnsafePath),
     ("Relatórios são gerados", ReportsAreGenerated),
     ("Experimento é determinístico e pareado", ExperimentIsDeterministicAndPaired),
     ("Relatório de pesquisa não depende de HTML", ExperimentReportsAreGenerated),
@@ -104,6 +107,72 @@ static void BiContractRejectsUnsafeIdentifier()
     Throws<ArgumentException>(() => H3BiExportContext.CreateSynthetic(
         "run;inseguro",
         "h3-synthetic-generator-v1").Validate());
+}
+
+static void BiManifestAcceptsValidExport()
+{
+    WithSyntheticExport((directory, _) =>
+        H3BiManifestVerifier.VerifyAsync(Path.Combine(directory, "h3-bi-manifest.json"))
+            .GetAwaiter()
+            .GetResult());
+}
+
+static void BiManifestRejectsTamperedCsv()
+{
+    WithSyntheticExport((directory, _) =>
+    {
+        File.AppendAllText(Path.Combine(directory, "h3-synthetic.csv"), Environment.NewLine);
+        Throws<InvalidDataException>(() =>
+            H3BiManifestVerifier.VerifyAsync(Path.Combine(directory, "h3-bi-manifest.json"))
+                .GetAwaiter()
+                .GetResult());
+    });
+}
+
+static void BiManifestRejectsUnsafePath()
+{
+    WithSyntheticExport((directory, _) =>
+    {
+        var manifestPath = Path.Combine(directory, "h3-bi-manifest.json");
+        var manifest = File.ReadAllText(manifestPath)
+            .Replace("h3-synthetic.csv", "../h3-synthetic.csv", StringComparison.Ordinal);
+        File.WriteAllText(manifestPath, manifest);
+        Throws<InvalidDataException>(() =>
+            H3BiManifestVerifier.VerifyAsync(manifestPath).GetAwaiter().GetResult());
+    });
+}
+
+static void WithSyntheticExport(Action<string, H3BiExportContext> assertion)
+{
+    var directory = Path.Combine(
+        Path.GetTempPath(),
+        "h3-monitor-manifest-tests",
+        Guid.NewGuid().ToString("N"));
+
+    try
+    {
+        var samples = new SyntheticScenarioGenerator().Generate(
+            new SyntheticScenarioOptions(Days: 1, IntervalMinutes: 60));
+        var context = H3BiExportContext.CreateSynthetic(
+            "manifest-verifier-test",
+            "h3-synthetic-generator-v1",
+            new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero));
+        new H3ReportExporter().ExportAsync(
+                directory,
+                samples,
+                new H3StatisticsAnalyzer().Analyze(samples),
+                context)
+            .GetAwaiter()
+            .GetResult();
+        assertion(directory, context);
+    }
+    finally
+    {
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }
 
 static void ReportsAreGenerated()

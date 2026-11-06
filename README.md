@@ -55,6 +55,9 @@ execução reproduzível, informe também `--run-id` e `--exported-at-utc`. O ca
 `observed_time_basis` distingue o horário simulado do proxy de exportação usado
 no experimento agregado.
 
+O verificador `H3BiManifestVerifier` recusa tabela ausente, caminho inseguro,
+duplicidade, divergência de linhas, tamanho ou SHA-256 antes do consumo do CSV.
+
 ## Validar
 
 ```powershell

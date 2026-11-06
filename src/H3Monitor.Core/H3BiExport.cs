@@ -145,3 +145,94 @@ internal static class H3BiManifestWriter
             cancellationToken);
     }
 }
+
+public static class H3BiManifestVerifier
+{
+    public static async Task VerifyAsync(
+        string manifestPath,
+        CancellationToken cancellationToken = default)
+    {
+        var fullManifestPath = Path.GetFullPath(manifestPath);
+        await using var manifestStream = new FileStream(
+            fullManifestPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81_920,
+            useAsync: true);
+        var manifest = await JsonSerializer.DeserializeAsync<H3BiManifest>(
+                manifestStream,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new InvalidDataException("Manifesto BI vazio ou inválido.");
+
+        new H3BiExportContext(
+                manifest.SchemaVersion,
+                manifest.ProjectId,
+                manifest.RunId,
+                manifest.SourceId,
+                manifest.EvidenceClass,
+                manifest.QualityStatus,
+                manifest.ExportedAtUtc)
+            .Validate();
+
+        if (manifest.Tables is null || manifest.Tables.Count == 0)
+        {
+            throw new InvalidDataException("Manifesto BI sem tabelas.");
+        }
+
+        var outputDirectory = Path.GetDirectoryName(fullManifestPath)
+            ?? throw new InvalidDataException("Manifesto BI sem diretório.");
+        var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var table in manifest.Tables)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(table.FileName) ||
+                table.FileName != Path.GetFileName(table.FileName) ||
+                !fileNames.Add(table.FileName) ||
+                table.Rows < 0 ||
+                table.Bytes < 0 ||
+                string.IsNullOrWhiteSpace(table.Grain) ||
+                string.IsNullOrWhiteSpace(table.Sha256) ||
+                table.Sha256.Length != 64 ||
+                table.Sha256.Any(character => !Uri.IsHexDigit(character)))
+            {
+                throw new InvalidDataException("Tabela inválida no manifesto BI.");
+            }
+
+            var tablePath = Path.Combine(outputDirectory, table.FileName);
+            if (!File.Exists(tablePath))
+            {
+                throw new InvalidDataException($"Tabela BI ausente: {table.FileName}");
+            }
+
+            var fileInfo = new FileInfo(tablePath);
+            if (fileInfo.Length != table.Bytes)
+            {
+                throw new InvalidDataException($"Tamanho divergente: {table.FileName}");
+            }
+
+            await using var tableStream = new FileStream(
+                tablePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 81_920,
+                useAsync: true);
+            var actualHash = Convert.ToHexString(
+                    await SHA256.HashDataAsync(tableStream, cancellationToken).ConfigureAwait(false))
+                .ToLowerInvariant();
+            if (!actualHash.Equals(table.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException($"SHA-256 divergente: {table.FileName}");
+            }
+
+            var actualRows = Math.Max(0, File.ReadLines(tablePath).Count() - 1);
+            if (actualRows != table.Rows)
+            {
+                throw new InvalidDataException($"Quantidade de linhas divergente: {table.FileName}");
+            }
+        }
+    }
+}
