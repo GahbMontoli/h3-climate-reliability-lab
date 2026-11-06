@@ -48,6 +48,13 @@ Os resultados ficam em `output\demo`:
 - `h3-summary.json`;
 - `h3-dashboard.html`.
 
+O CSV possui contrato BI v1 com `schema_version`, `project_id`, `run_id`,
+`source_id`, classe de evidência, qualidade, timestamps UTC e intervalo. O
+arquivo `h3-bi-manifest.json` registra grão, linhas, tamanho e SHA-256. Para uma
+execução reproduzível, informe também `--run-id` e `--exported-at-utc`. O campo
+`observed_time_basis` distingue o horário simulado do proxy de exportação usado
+no experimento agregado.
+
 ## Validar
 
 ```powershell
@@ -69,6 +76,7 @@ Os resultados leves ficam em `output\research`:
 - `RELATORIO_PESQUISA_H3.md` para leitura direta;
 - `h3-experiment-summary.json` para auditoria e integração;
 - `h3-experiment-observations.csv` para análise estatística.
+- `h3-experiment-bi-manifest.json` para proveniência do contrato tabular.
 
 O experimento compara controle de umidade, margem térmica superficial, redução
 de ingresso de ar úmido, confiabilidade do HVAC e estratégia combinada. Seus

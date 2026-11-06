@@ -19,7 +19,9 @@ public sealed record H3Statistics(
     double LongestHighRiskEventHours,
     double OutdoorHumidityMarginCorrelation,
     IReadOnlyList<H3RiskDistribution> Distribution,
-    bool SyntheticData = true);
+    bool SyntheticData = true,
+    int SchemaVersion = 1,
+    string EvidenceClass = "synthetic");
 
 public sealed class H3StatisticsAnalyzer
 {

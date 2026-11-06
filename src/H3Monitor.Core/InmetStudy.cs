@@ -75,6 +75,7 @@ public sealed record InmetStudySummary(
     IReadOnlyList<InmetVariableSummary> Variables,
     IReadOnlyList<InmetEnvelopeComparison> ExternalEnvelopeComparison,
     bool RawUnvalidated = true,
+    string EvidenceClass = "official_raw",
     string InterpretationLimit =
         "Clima externo real foi comparado apenas ao envelope das entradas externas sintéticas. Não foi calculado risco interno, falha ou causalidade.");
 

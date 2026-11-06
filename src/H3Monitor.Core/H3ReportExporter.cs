@@ -7,20 +7,37 @@ namespace H3Monitor.Core;
 
 public sealed class H3ReportExporter
 {
+    public Task ExportAsync(
+        string outputDirectory,
+        IReadOnlyList<H3Sample> samples,
+        H3Statistics statistics,
+        CancellationToken cancellationToken = default) =>
+        ExportAsync(
+            outputDirectory,
+            samples,
+            statistics,
+            H3BiExportContext.CreateSynthetic(
+                $"simulation-{statistics.Start.ToUniversalTime():yyyyMMddTHHmmssZ}",
+                "h3-synthetic-generator-v1"),
+            cancellationToken);
+
     public async Task ExportAsync(
         string outputDirectory,
         IReadOnlyList<H3Sample> samples,
         H3Statistics statistics,
+        H3BiExportContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         ArgumentNullException.ThrowIfNull(samples);
         ArgumentNullException.ThrowIfNull(statistics);
+        ArgumentNullException.ThrowIfNull(context);
+        context.Validate();
 
         Directory.CreateDirectory(outputDirectory);
         await File.WriteAllTextAsync(
             Path.Combine(outputDirectory, "h3-synthetic.csv"),
-            BuildCsv(samples),
+            BuildCsv(samples, statistics.IntervalMinutes, context),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
             cancellationToken);
 
@@ -38,15 +55,29 @@ public sealed class H3ReportExporter
             BuildHtml(samples, statistics),
             Encoding.UTF8,
             cancellationToken);
+
+        await H3BiManifestWriter.WriteAsync(
+            Path.Combine(outputDirectory, "h3-bi-manifest.json"),
+            context,
+            [new H3BiTableManifest(
+                "h3-synthetic.csv",
+                samples.Count,
+                "uma observação sintética por execução, cenário e timestamp")],
+            cancellationToken);
     }
 
-    private static string BuildCsv(IReadOnlyList<H3Sample> samples)
+    private static string BuildCsv(
+        IReadOnlyList<H3Sample> samples,
+        double intervalMinutes,
+        H3BiExportContext context)
     {
         var builder = new StringBuilder();
         builder.AppendLine(
             "timestamp;outdoor_temperature_c;outdoor_rh_percent;indoor_temperature_c;" +
             "indoor_rh_percent;surface_temperature_c;dew_point_c;dew_point_margin_c;" +
-            "risk_level;door_open;hvac_active;scenario_tag;is_synthetic");
+            "risk_level;door_open;hvac_active;scenario_tag;is_synthetic;" +
+            "schema_version;project_id;run_id;source_id;evidence_class;quality_status;" +
+            "observed_at_utc;observed_time_basis;ingested_at_utc;interval_minutes");
 
         foreach (var sample in samples)
         {
@@ -62,7 +93,17 @@ public sealed class H3ReportExporter
                 .Append(sample.DoorOpen.ToString().ToLowerInvariant()).Append(';')
                 .Append(sample.HvacActive.ToString().ToLowerInvariant()).Append(';')
                 .Append(sample.ScenarioTag).Append(';')
-                .AppendLine(sample.IsSynthetic.ToString().ToLowerInvariant());
+                .Append(sample.IsSynthetic.ToString().ToLowerInvariant()).Append(';')
+                .Append(context.SchemaVersion).Append(';')
+                .Append(context.ProjectId).Append(';')
+                .Append(context.RunId).Append(';')
+                .Append(context.SourceId).Append(';')
+                .Append(context.EvidenceClass).Append(';')
+                .Append(context.QualityStatus).Append(';')
+                .Append(sample.Timestamp.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append(';')
+                .Append("simulation_timestamp_utc;")
+                .Append(context.ExportedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append(';')
+                .AppendLine(Number(intervalMinutes));
         }
 
         return builder.ToString();

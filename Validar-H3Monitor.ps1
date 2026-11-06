@@ -22,6 +22,8 @@ dotnet run --project $CliProject -c Release --no-build -- `
     --days 7 `
     --interval-minutes 10 `
     --seed 20261029 `
+    --run-id h3-validation-simulation-20261029 `
+    --exported-at-utc 2026-10-31T12:00:00Z `
     --output $ValidationOutput
 
 if ($LASTEXITCODE -ne 0) {
@@ -34,6 +36,8 @@ dotnet run --project $CliProject -c Release --no-build -- `
     --days 14 `
     --interval-minutes 30 `
     --seed 20261029 `
+    --run-id h3-validation-experiment-20261029 `
+    --exported-at-utc 2026-10-31T12:05:00Z `
     --output $ResearchOutput
 
 if ($LASTEXITCODE -ne 0) {

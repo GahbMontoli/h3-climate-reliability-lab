@@ -2,7 +2,9 @@ using H3Monitor.Core;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 var tests = new (string Name, Action Run)[]
 {
@@ -13,6 +15,7 @@ var tests = new (string Name, Action Run)[]
     ("Gerador é determinístico", GeneratorIsDeterministic),
     ("Quantidade de amostras", SampleCount),
     ("Estatísticas preservam aviso sintético", StatisticsAreSynthetic),
+    ("Contrato BI rejeita identificador inseguro", BiContractRejectsUnsafeIdentifier),
     ("Relatórios são gerados", ReportsAreGenerated),
     ("Experimento é determinístico e pareado", ExperimentIsDeterministicAndPaired),
     ("Relatório de pesquisa não depende de HTML", ExperimentReportsAreGenerated),
@@ -96,6 +99,13 @@ static void StatisticsAreSynthetic()
     True(statistics.HighRiskEvents > 0, "O cenário não produziu eventos de risco.");
 }
 
+static void BiContractRejectsUnsafeIdentifier()
+{
+    Throws<ArgumentException>(() => H3BiExportContext.CreateSynthetic(
+        "run;inseguro",
+        "h3-synthetic-generator-v1").Validate());
+}
+
 static void ReportsAreGenerated()
 {
     var directory = Path.Combine(
@@ -108,7 +118,11 @@ static void ReportsAreGenerated()
         var samples = new SyntheticScenarioGenerator().Generate(
             new SyntheticScenarioOptions(Days: 1, IntervalMinutes: 30));
         var statistics = new H3StatisticsAnalyzer().Analyze(samples);
-        new H3ReportExporter().ExportAsync(directory, samples, statistics)
+        var context = H3BiExportContext.CreateSynthetic(
+            "simulation-contract-test",
+            "h3-synthetic-generator-v1",
+            new DateTimeOffset(2026, 10, 31, 12, 0, 0, TimeSpan.Zero));
+        new H3ReportExporter().ExportAsync(directory, samples, statistics, context)
             .GetAwaiter()
             .GetResult();
 
@@ -117,6 +131,12 @@ static void ReportsAreGenerated()
         True(File.Exists(Path.Combine(directory, "h3-dashboard.html")), "Dashboard ausente.");
         var html = File.ReadAllText(Path.Combine(directory, "h3-dashboard.html"));
         True(html.Contains("DADOS SINTÉTICOS", StringComparison.Ordinal), "Aviso ausente.");
+        AssertBiContract(
+            directory,
+            "h3-synthetic.csv",
+            "h3-bi-manifest.json",
+            samples.Count,
+            context.RunId);
     }
     finally
     {
@@ -165,7 +185,11 @@ static void ExperimentReportsAreGenerated()
             Days: 2,
             IntervalMinutes: 60,
             Seed: 99));
-        new H3ExperimentExporter().ExportAsync(directory, result)
+        var context = H3BiExportContext.CreateSynthetic(
+            "experiment-contract-test",
+            "h3-paired-experiment-v1",
+            new DateTimeOffset(2026, 10, 31, 12, 5, 0, TimeSpan.Zero));
+        new H3ExperimentExporter().ExportAsync(directory, result, context)
             .GetAwaiter()
             .GetResult();
 
@@ -185,6 +209,12 @@ static void ExperimentReportsAreGenerated()
         True(
             report.Contains("DADOS SINTÉTICOS", StringComparison.Ordinal),
             "Aviso de evidência sintética ausente.");
+        AssertBiContract(
+            directory,
+            "h3-experiment-observations.csv",
+            "h3-experiment-bi-manifest.json",
+            result.Observations.Count,
+            context.RunId);
     }
     finally
     {
@@ -193,6 +223,42 @@ static void ExperimentReportsAreGenerated()
             Directory.Delete(directory, recursive: true);
         }
     }
+}
+
+static void AssertBiContract(
+    string directory,
+    string csvFileName,
+    string manifestFileName,
+    int expectedRows,
+    string expectedRunId)
+{
+    var csvPath = Path.Combine(directory, csvFileName);
+    var manifestPath = Path.Combine(directory, manifestFileName);
+    True(File.Exists(manifestPath), $"Manifesto BI ausente: {manifestFileName}");
+    var header = File.ReadLines(csvPath).First().TrimStart('\uFEFF');
+    foreach (var column in new[]
+             {
+                 "schema_version", "project_id", "run_id", "source_id",
+                 "evidence_class", "quality_status", "observed_at_utc",
+                 "observed_time_basis", "ingested_at_utc", "interval_minutes"
+             })
+    {
+        True(header.Split(';').Contains(column), $"Coluna BI ausente: {column}");
+    }
+
+    using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+    var root = manifest.RootElement;
+    EqualValue(1, root.GetProperty("schemaVersion").GetInt32());
+    EqualValue("h3-monitor", root.GetProperty("projectId").GetString()!);
+    EqualValue(expectedRunId, root.GetProperty("runId").GetString()!);
+    EqualValue("synthetic", root.GetProperty("evidenceClass").GetString()!);
+    var table = root.GetProperty("tables")[0];
+    EqualValue(csvFileName, table.GetProperty("fileName").GetString()!);
+    EqualValue(expectedRows, table.GetProperty("rows").GetInt32());
+    EqualValue(new FileInfo(csvPath).Length, table.GetProperty("bytes").GetInt64());
+    var expectedHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(csvPath)))
+        .ToLowerInvariant();
+    EqualValue(expectedHash, table.GetProperty("sha256").GetString()!);
 }
 
 static void InmetRangeFixtureIsImported()

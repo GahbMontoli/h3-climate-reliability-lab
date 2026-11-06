@@ -47,7 +47,9 @@ public sealed record H3ExperimentResult(
     string ConfidenceIntervalMethod =
         "Aproximação normal de 95% sobre diferenças pareadas (média ± 1,96 × erro-padrão).",
     string EvidenceLimit =
-        "Resultados validam apenas o comportamento interno do modelo sintético; não comprovam efeito causal em equipamentos reais.");
+        "Resultados validam apenas o comportamento interno do modelo sintético; não comprovam efeito causal em equipamentos reais.",
+    int SchemaVersion = 1,
+    string EvidenceClass = "synthetic");
 
 public sealed class H3ExperimentRunner
 {

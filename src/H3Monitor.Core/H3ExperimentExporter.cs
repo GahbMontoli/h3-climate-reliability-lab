@@ -6,18 +6,33 @@ namespace H3Monitor.Core;
 
 public sealed class H3ExperimentExporter
 {
+    public Task ExportAsync(
+        string outputDirectory,
+        H3ExperimentResult result,
+        CancellationToken cancellationToken = default) =>
+        ExportAsync(
+            outputDirectory,
+            result,
+            H3BiExportContext.CreateSynthetic(
+                $"experiment-{result.Options.Seed}-{result.Options.Replications}r",
+                "h3-paired-experiment-v1"),
+            cancellationToken);
+
     public async Task ExportAsync(
         string outputDirectory,
         H3ExperimentResult result,
+        H3BiExportContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(context);
+        context.Validate();
         Directory.CreateDirectory(outputDirectory);
 
         await File.WriteAllTextAsync(
             Path.Combine(outputDirectory, "h3-experiment-observations.csv"),
-            BuildCsv(result.Observations),
+            BuildCsv(result, context),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
             cancellationToken);
 
@@ -35,9 +50,20 @@ public sealed class H3ExperimentExporter
             BuildMarkdown(result),
             Encoding.UTF8,
             cancellationToken);
+
+        await H3BiManifestWriter.WriteAsync(
+            Path.Combine(outputDirectory, "h3-experiment-bi-manifest.json"),
+            context,
+            [new H3BiTableManifest(
+                "h3-experiment-observations.csv",
+                result.Observations.Count,
+                "uma replicação sintética pareada por intervenção")],
+            cancellationToken);
     }
 
-    private static string BuildCsv(IReadOnlyList<H3ExperimentObservation> observations)
+    private static string BuildCsv(
+        H3ExperimentResult result,
+        H3BiExportContext context)
     {
         var builder = new StringBuilder();
         builder.AppendLine(
@@ -45,9 +71,11 @@ public sealed class H3ExperimentExporter
             "intervention_exposure_hours;exposure_hours_avoided;" +
             "baseline_high_risk_events;intervention_high_risk_events;" +
             "high_risk_events_avoided;baseline_minimum_margin_c;" +
-            "intervention_minimum_margin_c;minimum_margin_gain_c;is_synthetic");
+            "intervention_minimum_margin_c;minimum_margin_gain_c;is_synthetic;" +
+            "schema_version;project_id;run_id;source_id;evidence_class;quality_status;" +
+            "observed_at_utc;observed_time_basis;ingested_at_utc;interval_minutes;experiment_days");
 
-        foreach (var observation in observations)
+        foreach (var observation in result.Observations)
         {
             builder.Append(observation.Replication).Append(';')
                 .Append(observation.Seed).Append(';')
@@ -61,7 +89,18 @@ public sealed class H3ExperimentExporter
                 .Append(Number(observation.BaselineMinimumMarginC)).Append(';')
                 .Append(Number(observation.InterventionMinimumMarginC)).Append(';')
                 .Append(Number(observation.MinimumMarginGainC)).Append(';')
-                .AppendLine("true");
+                .Append("true;")
+                .Append(context.SchemaVersion).Append(';')
+                .Append(context.ProjectId).Append(';')
+                .Append(context.RunId).Append(';')
+                .Append(context.SourceId).Append(';')
+                .Append(context.EvidenceClass).Append(';')
+                .Append(context.QualityStatus).Append(';')
+                .Append(context.ExportedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append(';')
+                .Append("package_exported_at_utc_proxy;")
+                .Append(context.ExportedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append(';')
+                .Append(result.Options.IntervalMinutes).Append(';')
+                .AppendLine(result.Options.Days.ToString(CultureInfo.InvariantCulture));
         }
 
         return builder.ToString();

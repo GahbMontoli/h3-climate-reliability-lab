@@ -1,8 +1,15 @@
+using System.Globalization;
 using H3Monitor.Core;
 
 try
 {
     var options = ParseArguments(args);
+    var exportContext = H3BiExportContext.CreateSynthetic(
+        options.RunId ?? CreateRunId(options.Mode),
+        string.Equals(options.Mode, "experiment", StringComparison.OrdinalIgnoreCase)
+            ? "h3-paired-experiment-v1"
+            : "h3-synthetic-generator-v1",
+        options.ExportedAtUtc);
     if (string.Equals(options.Mode, "experiment", StringComparison.OrdinalIgnoreCase))
     {
         var result = new H3ExperimentRunner().Run(new H3ExperimentOptions(
@@ -10,7 +17,10 @@ try
             options.Days,
             options.IntervalMinutes,
             options.Seed));
-        await new H3ExperimentExporter().ExportAsync(options.OutputDirectory, result);
+        await new H3ExperimentExporter().ExportAsync(
+            options.OutputDirectory,
+            result,
+            exportContext);
 
         Console.WriteLine("H3 Monitor - experimento pareado concluído");
         Console.WriteLine($"Replicações sintéticas: {result.Options.Replications:N0}");
@@ -33,7 +43,8 @@ try
         await new H3ReportExporter().ExportAsync(
             options.OutputDirectory,
             samples,
-            statistics);
+            statistics,
+            exportContext);
 
         Console.WriteLine("H3 Monitor - simulação concluída");
         Console.WriteLine($"Amostras sintéticas: {statistics.TotalSamples:N0}");
@@ -101,7 +112,9 @@ static CliOptions ParseArguments(string[] arguments)
         ReadInt(values, "replications", 60, 2, 10_000),
         ReadInt(values, "year", 2025, 2000, 2100),
         values.GetValueOrDefault("station", "A101"),
-        values.GetValueOrDefault("output", defaultOutput));
+        values.GetValueOrDefault("output", defaultOutput),
+        values.GetValueOrDefault("run-id"),
+        ReadUtcTimestamp(values, "exported-at-utc"));
 }
 
 static int ReadInt(
@@ -124,6 +137,30 @@ static int ReadInt(
     return value;
 }
 
+static DateTimeOffset? ReadUtcTimestamp(
+    IReadOnlyDictionary<string, string> values,
+    string key)
+{
+    if (!values.TryGetValue(key, out var raw))
+    {
+        return null;
+    }
+
+    if (!DateTimeOffset.TryParse(
+            raw,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var value))
+    {
+        throw new ArgumentException($"Timestamp inválido para --{key}.", key);
+    }
+
+    return value.ToUniversalTime();
+}
+
+static string CreateRunId(string mode) =>
+    $"{mode.ToLowerInvariant()}-{DateTimeOffset.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
+
 internal sealed record CliOptions(
     string Mode,
     int Days,
@@ -132,4 +169,6 @@ internal sealed record CliOptions(
     int Replications,
     int Year,
     string StationCode,
-    string OutputDirectory);
+    string OutputDirectory,
+    string? RunId,
+    DateTimeOffset? ExportedAtUtc);
