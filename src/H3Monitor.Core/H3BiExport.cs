@@ -12,6 +12,10 @@ public sealed record H3BiExportContext(
     string QualityStatus,
     DateTimeOffset ExportedAtUtc)
 {
+    private static readonly HashSet<string> AllowedEvidenceClasses = new(
+        ["synthetic", "official_raw", "lab_observed", "field_observed", "derived"],
+        StringComparer.Ordinal);
+
     public static H3BiExportContext CreateSynthetic(
         string runId,
         string sourceId,
@@ -36,6 +40,13 @@ public sealed record H3BiExportContext(
         ValidateIdentifier(RunId, nameof(RunId));
         ValidateIdentifier(SourceId, nameof(SourceId));
         ValidateIdentifier(EvidenceClass, nameof(EvidenceClass));
+        if (!AllowedEvidenceClasses.Contains(EvidenceClass))
+        {
+            throw new ArgumentException(
+                "Classe de evidência BI não reconhecida.",
+                nameof(EvidenceClass));
+        }
+
         ValidateIdentifier(QualityStatus, nameof(QualityStatus));
         if (ExportedAtUtc == default)
         {

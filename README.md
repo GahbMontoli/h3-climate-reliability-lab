@@ -55,6 +55,10 @@ execução reproduzível, informe também `--run-id` e `--exported-at-utc`. O ca
 `observed_time_basis` distingue o horário simulado do proxy de exportação usado
 no experimento agregado.
 
+O contrato aceita somente as classes de evidência `synthetic`, `official_raw`,
+`lab_observed`, `field_observed` e `derived`; valores genéricos ou ambíguos são
+rejeitados antes da exportação.
+
 O verificador `H3BiManifestVerifier` recusa tabela ausente, caminho inseguro,
 duplicidade, divergência de linhas, tamanho ou SHA-256 antes do consumo do CSV.
 

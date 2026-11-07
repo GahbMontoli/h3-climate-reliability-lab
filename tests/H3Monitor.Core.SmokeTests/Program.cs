@@ -16,6 +16,7 @@ var tests = new (string Name, Action Run)[]
     ("Quantidade de amostras", SampleCount),
     ("Estatísticas preservam aviso sintético", StatisticsAreSynthetic),
     ("Contrato BI rejeita identificador inseguro", BiContractRejectsUnsafeIdentifier),
+    ("Contrato BI rejeita classe de evidência desconhecida", BiContractRejectsUnknownEvidenceClass),
     ("Manifesto BI aceita exportação íntegra", BiManifestAcceptsValidExport),
     ("Manifesto BI rejeita CSV alterado", BiManifestRejectsTamperedCsv),
     ("Manifesto BI rejeita caminho inseguro", BiManifestRejectsUnsafePath),
@@ -107,6 +108,18 @@ static void BiContractRejectsUnsafeIdentifier()
     Throws<ArgumentException>(() => H3BiExportContext.CreateSynthetic(
         "run;inseguro",
         "h3-synthetic-generator-v1").Validate());
+}
+
+static void BiContractRejectsUnknownEvidenceClass()
+{
+    Throws<ArgumentException>(() => new H3BiExportContext(
+        1,
+        "h3-monitor",
+        "evidence-class-test",
+        "h3-test-source",
+        "field",
+        "valid",
+        new DateTimeOffset(2026, 11, 7, 12, 0, 0, TimeSpan.Zero)).Validate());
 }
 
 static void BiManifestAcceptsValidExport()
